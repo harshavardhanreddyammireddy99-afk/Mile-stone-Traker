@@ -1,0 +1,6 @@
+{
+  "name": "Interior Project Milestone Invoice & Retention Tracker",
+  "description": "A comprehensive system for tracking project milestones, billing, retention payments, and defects liability clearance for Glory Simon Interiors, supporting Role-Based Access Control (Client and Manager).",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

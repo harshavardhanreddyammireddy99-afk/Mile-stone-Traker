@@ -58,13 +58,13 @@ const authenticateToken = (req, res, next) => {
 };
 // ================= API ROUTES FIRST =================
 // Auth Route: Login
-app.post("/api/auth/login", (req, res) => {
+app.post("/api/auth/login", async (req, res) => {
     const { email, password, role } = req.body;
     if (!email || !password || !role) {
         res.status(400).json({ error: "Email, password, and role are required" });
         return;
     }
-    const db = readDB();
+    const db = await readDB();
     const matchedUser = db.users.find(u => u.email.toLowerCase() === email.toLowerCase() && u.role === role);
     if (!matchedUser) {
         res.status(401).json({ error: "Invalid credentials for chosen role" });
@@ -79,13 +79,13 @@ app.post("/api/auth/login", (req, res) => {
     });
 });
 // Auth Route: Sign Up
-app.post("/api/auth/signup", (req, res) => {
+app.post("/api/auth/signup", async (req, res) => {
     const { email, name, password, role, phone, location } = req.body;
     if (!email || !name || !password || !role) {
         res.status(400).json({ error: "Required fields are missing" });
         return;
     }
-    const db = readDB();
+    const db = await readDB();
     const exists = db.users.some(u => u.email.toLowerCase() === email.toLowerCase());
     if (exists) {
         res.status(400).json({ error: "A user with this email already exists" });
@@ -101,7 +101,7 @@ app.post("/api/auth/signup", (req, res) => {
         createdAt: new Date().toISOString()
     };
     db.users.push(newUser);
-    writeDB(db);
+    await writeDB(db);
     const sessionToken = `session_${newUser.id}_${Date.now()}`;
     activeSessions.set(sessionToken, newUser);
     res.status(201).json({
@@ -110,7 +110,7 @@ app.post("/api/auth/signup", (req, res) => {
     });
 });
 // Auth Route: Profile / Validate
-app.get("/api/auth/me", (req, res) => {
+app.get("/api/auth/me", async (req, res) => {
     const authHeader = req.headers["authorization"];
     const token = authHeader && authHeader.split(" ")[1];
     if (!token) {
@@ -125,7 +125,7 @@ app.get("/api/auth/me", (req, res) => {
     res.json({ user });
 });
 // Logs Out Service
-app.post("/api/auth/logout", (req, res) => {
+app.post("/api/auth/logout", async (req, res) => {
     const authHeader = req.headers["authorization"];
     const token = authHeader && authHeader.split(" ")[1];
     if (token) {
@@ -133,10 +133,93 @@ app.post("/api/auth/logout", (req, res) => {
     }
     res.json({ success: true, message: "Logged out successfully" });
 });
+// Debug Route: show all database tables in raw JSON (development helper)
+app.get("/api/debug/all", async (req, res) => {
+    if (process.env.NODE_ENV === "production") {
+        res.status(403).json({ error: "Debug endpoint disabled in production" });
+        return;
+    }
+    const db = await readDB();
+    res.json(db);
+});
+
+function renderDebugHtml(db) {
+    const renderTable = (name, rows) => {
+        if (!rows || rows.length === 0) {
+            return `<section><h2>${name}</h2><p><em>No rows found.</em></p></section>`;
+        }
+        const columns = Object.keys(rows[0]);
+        const header = columns.map(col => `<th>${col}</th>`).join("");
+        const body = rows.map(row => `
+            <tr>${columns.map(col => `<td>${String(row[col] ?? "")}</td>`).join("")}</tr>
+        `).join("");
+        return `
+            <section>
+                <h2>${name} (${rows.length})</h2>
+                <div class="table-wrap">
+                    <table>
+                        <thead><tr>${header}</tr></thead>
+                        <tbody>${body}</tbody>
+                    </table>
+                </div>
+            </section>
+        `;
+    };
+    const tablesHtml = Object.entries(db).map(([name, rows]) => renderTable(name, rows)).join("\n");
+    return `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Database Debug Viewer</title>
+    <style>
+        body { font-family: Inter, Arial, sans-serif; margin: 0; padding: 24px; background:#f6f8fb; color:#111; }
+        h1 { margin-bottom: 8px; }
+        p { margin-top: 0; color:#444; }
+        section { background: #fff; border: 1px solid #d8dee6; border-radius: 12px; padding: 18px; margin: 20px 0; box-shadow: 0 1px 4px rgba(15, 23, 42, 0.08); }
+        .table-wrap { overflow-x: auto; }
+        table { width: 100%; border-collapse: collapse; min-width: 700px; }
+        th, td { padding: 10px 12px; border: 1px solid #e2e8f0; text-align: left; vertical-align: top; }
+        th { background: #f3f4f6; color: #111827; font-weight: 600; }
+        tr:nth-child(even) { background: #fbfbfb; }
+        a { color: #1d4ed8; text-decoration: none; }
+        a:hover { text-decoration: underline; }
+        .top-bar { margin-bottom: 14px; }
+    </style>
+</head>
+<body>
+    <div class="top-bar">
+        <h1>Database Debug Viewer</h1>
+        <p>Live database tables in a readable table format. <a href="/api/debug/all">View raw JSON instead</a>.</p>
+    </div>
+    ${tablesHtml}
+</body>
+</html>`;
+}
+
+// Debug Route: show all database tables in HTML table format
+app.get("/api/debug/html", async (req, res) => {
+    if (process.env.NODE_ENV === "production") {
+        res.status(403).send("<h1>Debug endpoint disabled in production</h1>");
+        return;
+    }
+    const db = await readDB();
+    res.send(renderDebugHtml(db));
+});
+
+// Local debug page route
+app.get("/debug", async (req, res) => {
+    if (process.env.NODE_ENV === "production") {
+        res.status(403).send("<h1>Debug endpoint disabled in production</h1>");
+        return;
+    }
+    const db = await readDB();
+    res.send(renderDebugHtml(db));
+});
 // Projects: Get pipeline (Clients see only theirs, Managers see all)
-app.get("/api/projects", authenticateToken, (req, res) => {
+app.get("/api/projects", authenticateToken, async (req, res) => {
     const user = req.user;
-    const db = readDB();
+    const db = await readDB();
     if (user.role === "manager") {
         res.json(db.projects);
     }
@@ -147,7 +230,7 @@ app.get("/api/projects", authenticateToken, (req, res) => {
     }
 });
 // Projects: Create a new project (Manager only)
-app.post("/api/projects", authenticateToken, (req, res) => {
+app.post("/api/projects", authenticateToken, async (req, res) => {
     const user = req.user;
     if (user.role !== "manager") {
         res.status(403).json({ error: "Manager permissions required" });
@@ -158,7 +241,7 @@ app.post("/api/projects", authenticateToken, (req, res) => {
         res.status(400).json({ error: "Required fields missing" });
         return;
     }
-    const db = readDB();
+    const db = await readDB();
     // Lookup client
     const client = db.users.find(u => u.email.toLowerCase() === clientEmail.toLowerCase() && u.role === "client");
     if (!client) {
@@ -221,13 +304,13 @@ app.post("/api/projects", authenticateToken, (req, res) => {
         };
     });
     db.milestones.push(...projectMilestones);
-    writeDB(db);
-    logAction(user.id, user.name, "manager", projectId, name, "Project Formed", `Created project with 10% retention rule, release scheduled on ${retentionDate.toLocaleDateString()}.`);
-    pushNotification(client.id, projectId, name, `New Glory Simon Interiors project "${name}" has been established with your design team. Welcome!`, "info");
+    await writeDB(db);
+    await logAction(user.id, user.name, "manager", projectId, name, "Project Formed", `Created project with 10% retention rule, release scheduled on ${retentionDate.toLocaleDateString()}.`);
+    await pushNotification(client.id, projectId, name, `New Glory Simon Interiors project "${name}" has been established with your design team. Welcome!`, "info");
     res.status(201).json({ project: newProject, milestones: projectMilestones });
 });
 // Update project status (Manager only)
-app.put("/api/projects/:id/status", authenticateToken, (req, res) => {
+app.put("/api/projects/:id/status", authenticateToken, async (req, res) => {
     const user = req.user;
     if (user.role !== "manager") {
         res.status(403).json({ error: "Manager permissions required" });
@@ -238,7 +321,7 @@ app.put("/api/projects/:id/status", authenticateToken, (req, res) => {
         res.status(400).json({ error: "Status is required" });
         return;
     }
-    const db = readDB();
+    const db = await readDB();
     const projectIdx = db.projects.findIndex(p => p.id === req.params.id);
     if (projectIdx === -1) {
         res.status(404).json({ error: "Project not found" });
@@ -247,24 +330,24 @@ app.put("/api/projects/:id/status", authenticateToken, (req, res) => {
     const oldStatus = db.projects[projectIdx].status;
     db.projects[projectIdx].status = status;
     const project = db.projects[projectIdx];
-    writeDB(db);
-    logAction(user.id, user.name, "manager", project.id, project.name, "Status Changed", `Shifted project phase from '${oldStatus}' to '${status}'.`);
-    pushNotification(project.clientId, project.id, project.name, `Your project stage is officially in "${status}". View the breakdown in your client portal.`, "info");
+    await writeDB(db);
+    await logAction(user.id, user.name, "manager", project.id, project.name, "Status Changed", `Shifted project phase from '${oldStatus}' to '${status}'.`);
+    await pushNotification(project.clientId, project.id, project.name, `Your project stage is officially in "${status}". View the breakdown in your client portal.`, "info");
     res.json(project);
 });
 // Get Milestones for project
-app.get("/api/projects/:id/milestones", authenticateToken, (req, res) => {
-    const db = readDB();
+app.get("/api/projects/:id/milestones", authenticateToken, async (req, res) => {
+    const db = await readDB();
     const projectMilestones = db.milestones.filter(m => m.projectId === req.params.id);
     // Sort by stageOrder chronological index
     projectMilestones.sort((a, b) => a.stageOrder - b.stageOrder);
     res.json(projectMilestones);
 });
 // Raising invoice for Milestone / Confirming payment
-app.put("/api/milestones/:id", authenticateToken, (req, res) => {
+app.put("/api/milestones/:id", authenticateToken, async (req, res) => {
     const user = req.user;
     const { status, invoiceNumber, paidDate } = req.body;
-    const db = readDB();
+    const db = await readDB();
     const index = db.milestones.findIndex(m => m.id === req.params.id);
     if (index === -1) {
         res.status(404).json({ error: "Milestone status update failed" });
@@ -285,14 +368,14 @@ app.put("/api/milestones/:id", authenticateToken, (req, res) => {
     milestone.status = status;
     if (status === "Invoiced") {
         milestone.invoiceNumber = invoiceNumber || `INV-2026-${Math.floor(100 + Math.random() * 900)}`;
-        logAction(user.id, user.name, user.role, project.id, project.name, "Milestone Invoiced", `Created Invoice ${milestone.invoiceNumber} for '${milestone.name}'. Retention deduction amount held: ₹${milestone.retentionHeld.toLocaleString()}.`);
-        pushNotification(project.clientId, project.id, project.name, `Glory Simon Interiors posted Invoice ${milestone.invoiceNumber} for phase "${milestone.name}". Please process at your earliest convenience.`, "milestone");
+        await logAction(user.id, user.name, user.role, project.id, project.name, "Milestone Invoiced", `Created Invoice ${milestone.invoiceNumber} for '${milestone.name}'. Retention deduction amount held: ₹${milestone.retentionHeld.toLocaleString()}.`);
+        await pushNotification(project.clientId, project.id, project.name, `Glory Simon Interiors posted Invoice ${milestone.invoiceNumber} for phase "${milestone.name}". Please process at your earliest convenience.`, "milestone");
     }
     else if (status === "Paid") {
         milestone.paidDate = paidDate || new Date().toISOString();
-        logAction(user.id, user.name, user.role, project.id, project.name, "Milestone Cleared", `Settled Milestone Invoice covering '${milestone.name}'. Received amount, retention deposit recorded.`);
-        pushNotification(project.clientId, project.id, project.name, `Payment confirmation: ₹${milestone.invoiceAmount.toLocaleString()} has been received for "${milestone.name}". Thank you.`, "milestone");
-        pushNotification(db.users.find(u => u.role === "manager")?.id || "usr_mgr_1", project.id, project.name, `Client ${project.clientName} paid Invoice for "${milestone.name}". Milestone cleared successfully.`, "info");
+        await logAction(user.id, user.name, user.role, project.id, project.name, "Milestone Cleared", `Settled Milestone Invoice covering '${milestone.name}'. Received amount, retention deposit recorded.`);
+        await pushNotification(project.clientId, project.id, project.name, `Payment confirmation: ₹${milestone.invoiceAmount.toLocaleString()} has been received for "${milestone.name}". Thank you.`, "milestone");
+        await pushNotification(db.users.find(u => u.role === "manager")?.id || "usr_mgr_1", project.id, project.name, `Client ${project.clientName} paid Invoice for "${milestone.name}". Milestone cleared successfully.`, "info");
         // Auto status update: If ALL project milestones are Paid, set project status to "Completed"
         const allMilestones = db.milestones.filter(m => m.projectId === project.id);
         const allPaid = allMilestones.every(m => m.status === "Paid");
@@ -300,18 +383,18 @@ app.put("/api/milestones/:id", authenticateToken, (req, res) => {
             project.status = "Completed";
         }
     }
-    writeDB(db);
+    await writeDB(db);
     res.json(milestone);
 });
 // Update retention release status (Manager only)
-app.put("/api/projects/:id/retention-release", authenticateToken, (req, res) => {
+app.put("/api/projects/:id/retention-release", authenticateToken, async (req, res) => {
     const user = req.user;
     if (user.role !== "manager") {
         res.status(403).json({ error: "Manager permissions required" });
         return;
     }
     const { release } = req.body;
-    const db = readDB();
+    const db = await readDB();
     const projectIdx = db.projects.findIndex(p => p.id === req.params.id);
     if (projectIdx === -1) {
         res.status(404).json({ error: "Project not found" });
@@ -322,26 +405,26 @@ app.put("/api/projects/:id/retention-release", authenticateToken, (req, res) => 
     if (release) {
         project.status = "Completed";
     }
-    writeDB(db);
-    logAction(user.id, user.name, "manager", project.id, project.name, "Retention Released", `Retention fund of ₹${project.retentionAmount.toLocaleString()} officially claimed and received. Defect Liability Period Certificate issued.`);
-    pushNotification(project.clientId, project.id, project.name, `Glory Simon Interiors has successfully claimed the matching retention hold. The project is marked as Fully Settled!`, "retention");
+    await writeDB(db);
+    await logAction(user.id, user.name, "manager", project.id, project.name, "Retention Released", `Retention fund of ₹${project.retentionAmount.toLocaleString()} officially claimed and received. Defect Liability Period Certificate issued.`);
+    await pushNotification(project.clientId, project.id, project.name, `Glory Simon Interiors has successfully claimed the matching retention hold. The project is marked as Fully Settled!`, "retention");
     res.json(project);
 });
 // Get Snags for project
-app.get("/api/projects/:id/snags", authenticateToken, (req, res) => {
-    const db = readDB();
+app.get("/api/projects/:id/snags", authenticateToken, async (req, res) => {
+    const db = await readDB();
     const snags = db.snagItems.filter(s => s.projectId === req.params.id);
     res.json(snags);
 });
 // Create Snag Item (Client or Manager)
-app.post("/api/projects/:id/snags", authenticateToken, (req, res) => {
+app.post("/api/projects/:id/snags", authenticateToken, async (req, res) => {
     const user = req.user;
     const { description, roomLocation } = req.body;
     if (!description || !roomLocation) {
         res.status(400).json({ error: "Description and Room Location are required" });
         return;
     }
-    const db = readDB();
+    const db = await readDB();
     const project = db.projects.find(p => p.id === req.params.id);
     if (!project) {
         res.status(404).json({ error: "Project not found" });
@@ -363,22 +446,22 @@ app.post("/api/projects/:id/snags", authenticateToken, (req, res) => {
     if (project.status === "Completed") {
         project.status = "Snag List Clearance";
     }
-    writeDB(db);
-    logAction(user.id, user.name, user.role, project.id, project.name, "Snag Added", `Reported snag in ${roomLocation}: "${description}".`);
+    await writeDB(db);
+    await logAction(user.id, user.name, user.role, project.id, project.name, "Snag Added", `Reported snag in ${roomLocation}: "${description}".`);
     // Notify other party
     const targetAlertUserId = user.role === "manager" ? project.clientId : "usr_mgr_1";
-    pushNotification(targetAlertUserId, project.id, project.name, `New defect reported in room: ${roomLocation} - ${description}. Please review snag logs.`, "alert");
+    await pushNotification(targetAlertUserId, project.id, project.name, `New defect reported in room: ${roomLocation} - ${description}. Please review snag logs.`, "alert");
     res.status(201).json(newSnag);
 });
 // Update Snag status (Clear, In Progress)
-app.put("/api/snags/:id", authenticateToken, (req, res) => {
+app.put("/api/snags/:id", authenticateToken, async (req, res) => {
     const user = req.user;
     const { status } = req.body;
     if (!status) {
         res.status(400).json({ error: "Status is required" });
         return;
     }
-    const db = readDB();
+    const db = await readDB();
     const index = db.snagItems.findIndex(s => s.id === req.params.id);
     if (index === -1) {
         res.status(404).json({ error: "Snag item not found" });
@@ -402,27 +485,27 @@ app.put("/api/snags/:id", authenticateToken, (req, res) => {
     const allProjectSnags = db.snagItems.filter(s => s.projectId === project.id);
     const uncleared = allProjectSnags.filter(s => s.status !== "Cleared");
     project.punchListCleared = uncleared.length === 0;
-    writeDB(db);
-    logAction(user.id, user.name, user.role, project.id, project.name, "Snag Status Update", `Set defect snag "${snag.description}" resolved status to: ${status}.`);
+    await writeDB(db);
+    await logAction(user.id, user.name, user.role, project.id, project.name, "Snag Status Update", `Set defect snag "${snag.description}" resolved status to: ${status}.`);
     const targetAlertUserId = user.role === "manager" ? project.clientId : "usr_mgr_1";
-    pushNotification(targetAlertUserId, project.id, project.name, `Snag update: defect reported in ${snag.roomLocation} is now marked "${status}".`, "info");
+    await pushNotification(targetAlertUserId, project.id, project.name, `Snag update: defect reported in ${snag.roomLocation} is now marked "${status}".`, "info");
     res.json(snag);
 });
 // Secure Documents Sharing list
-app.get("/api/projects/:id/documents", authenticateToken, (req, res) => {
-    const db = readDB();
+app.get("/api/projects/:id/documents", authenticateToken, async (req, res) => {
+    const db = await readDB();
     const docs = db.documents.filter(d => d.projectId === req.params.id);
     res.json(docs);
 });
 // Secure File Upload route (Takes base64 JSON upload to remain robust inside containers)
-app.post("/api/projects/:id/documents", authenticateToken, (req, res) => {
+app.post("/api/projects/:id/documents", authenticateToken, async (req, res) => {
     const user = req.user;
     const { name, type, base64Data, fileName, fileSize } = req.body;
     if (!name || !type || !base64Data || !fileName) {
         res.status(400).json({ error: "Document credentials (name, type, file payload) missing" });
         return;
     }
-    const db = readDB();
+    const db = await readDB();
     const project = db.projects.find(p => p.id === req.params.id);
     if (!project) {
         res.status(404).json({ error: "Project references invalid" });
@@ -450,10 +533,10 @@ app.post("/api/projects/:id/documents", authenticateToken, (req, res) => {
             uploadedAt: new Date().toISOString()
         };
         db.documents.push(documentRecord);
-        writeDB(db);
-        logAction(user.id, user.name, user.role, project.id, project.name, "Document Shared", `Shared layout/milestone file: "${name}" (${fileName}).`);
+        await writeDB(db);
+        await logAction(user.id, user.name, user.role, project.id, project.name, "Document Shared", `Shared layout/milestone file: "${name}" (${fileName}).`);
         const targetAlertUserId = user.role === "manager" ? project.clientId : "usr_mgr_1";
-        pushNotification(targetAlertUserId, project.id, project.name, `A new document has been shared with you: "${name}" uploaded by ${user.name}.`, "info");
+        await pushNotification(targetAlertUserId, project.id, project.name, `A new document has been shared with you: "${name}" uploaded by ${user.name}.`, "info");
         res.status(201).json(documentRecord);
     }
     catch (err) {
@@ -462,37 +545,37 @@ app.post("/api/projects/:id/documents", authenticateToken, (req, res) => {
     }
 });
 // Get notification center matching role
-app.get("/api/notifications", authenticateToken, (req, res) => {
+app.get("/api/notifications", authenticateToken, async (req, res) => {
     const user = req.user;
-    const db = readDB();
+    const db = await readDB();
     const myNotifications = db.notifications.filter(n => n.userId === user.id);
     res.json(myNotifications);
 });
 // Clear single alert
-app.put("/api/notifications/:id/read", authenticateToken, (req, res) => {
-    const db = readDB();
+app.put("/api/notifications/:id/read", authenticateToken, async (req, res) => {
+    const db = await readDB();
     const index = db.notifications.findIndex(n => n.id === req.params.id);
     if (index !== -1) {
         db.notifications[index].read = true;
-        writeDB(db);
+        await writeDB(db);
         res.json({ success: true });
         return;
     }
     res.status(404).json({ error: "Notification not found" });
 });
 // System wide audit trail (Manager only check)
-app.get("/api/audit-logs", authenticateToken, (req, res) => {
+app.get("/api/audit-logs", authenticateToken, async (req, res) => {
     const user = req.user;
     if (user.role !== "manager") {
         res.status(403).json({ error: "Manager permissions required" });
         return;
     }
-    const db = readDB();
+    const db = await readDB();
     res.json(db.auditLogs);
 });
-app.get("/api/projects/:id/export", authenticateToken, (req, res) => {
+app.get("/api/projects/:id/export", authenticateToken, async (req, res) => {
     const user = req.user;
-    const db = readDB();
+    const db = await readDB();
     const project = db.projects.find((p) => p.id === req.params.id);
     if (!project) {
         res.status(404).json({ error: "Project not found" });
@@ -626,6 +709,16 @@ app.post("/api/ai/explain", authenticateToken, async (req, res) => {
     }
 });
 // ================= VITE OR STATIC SERVER MIDDLEWARE =================
+async function listenOnPort(port) {
+    return new Promise((resolve, reject) => {
+        const server = app.listen(port, "0.0.0.0", () => {
+            console.log(`Server running securely on port ${port}`);
+            resolve(server);
+        });
+        server.on("error", reject);
+    });
+}
+
 async function startServer() {
     if (process.env.NODE_ENV !== "production") {
         const vite = await createViteServer({
@@ -637,12 +730,24 @@ async function startServer() {
     else {
         const distPath = path.join(process.cwd(), "dist");
         app.use(express.static(distPath));
-        app.get("*", (req, res) => {
+        app.get("*", async (req, res) => {
             res.sendFile(path.join(distPath, "index.html"));
         });
     }
-    app.listen(PORT, "0.0.0.0", () => {
-        console.log(`Server running securely on port ${PORT}`);
-    });
+
+    const basePort = parseInt(process.env.PORT, 10) || 3002;
+    try {
+        await listenOnPort(basePort);
+    }
+    catch (error) {
+        if (error.code === "EADDRINUSE") {
+            const fallbackPort = basePort === 3002 ? 3003 : basePort + 1;
+            console.warn(`Port ${basePort} is already in use. Falling back to port ${fallbackPort}.`);
+            await listenOnPort(fallbackPort);
+        }
+        else {
+            throw error;
+        }
+    }
 }
 startServer();

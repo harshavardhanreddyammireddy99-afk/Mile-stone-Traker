@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Users, Landmark, FolderPlus, CheckCircle2, Clock, Sparkles, FileText, UploadCloud, ChevronRight, AlertCircle, FileSpreadsheet, ShieldCheck, Mail, Download } from 'lucide-react';
+import { Users, Landmark, FolderPlus, CheckCircle, Clock, Sparkles, FileText, UploadCloud, ChevronRight, AlertCircle, FileSpreadsheet, ShieldCheck, Mail, Download } from 'lucide-react';
 import { translations } from '../translations.js';
 export default function ManagerDashboard({ user, token, onLogout, openNotifications, unreadCount, language, onChangeLanguage }) {
     // Collection storage
@@ -199,7 +199,7 @@ export default function ManagerDashboard({ user, token, onLogout, openNotificati
     const handleReleaseRetention = async () => {
         if (!selectedProject)
             return;
-        if (!window.confirm(`Issue claim for direct release of ₹${selectedProject.retentionAmount.toLocaleString()}? This confirms snag clearances.`))
+        if (!window.confirm(`Issue claim for direct release of ₹${selectedProject.retentionamount.toLocaleString()}? This confirms snag clearances.`))
             return;
         try {
             const res = await fetch(`/api/projects/${selectedProject.id}/retention-release`, {
@@ -371,8 +371,8 @@ export default function ManagerDashboard({ user, token, onLogout, openNotificati
         }
     };
     // Pipeline metrics math
-    const totalValPortfolio = selectedProject ? selectedProject.totalAmount : projects.reduce((acc, curr) => acc + curr.totalAmount, 0);
-    const totalHeldRetention = selectedProject ? selectedProject.retentionAmount : projects.reduce((acc, curr) => acc + curr.retentionAmount, 0);
+    const totalValPortfolio = selectedProject ? selectedProject.totalamount : projects.reduce((acc, curr) => acc + curr.totalamount, 0);
+    const totalHeldRetention = selectedProject ? selectedProject.retentionamount : projects.reduce((acc, curr) => acc + curr.retentionamount, 0);
     if (loading) {
         return (<div className="flex flex-col items-center justify-center min-h-screen bg-[#E6E6FA] text-slate-600 animate-fade-in">
         <svg className="animate-spin h-8 w-8 text-indigo-600 mb-3" fill="none" viewBox="0 0 24 24">
@@ -456,7 +456,7 @@ export default function ManagerDashboard({ user, token, onLogout, openNotificati
               ₹{totalHeldRetention.toLocaleString()}
             </span>
             <span className="text-[10px] text-slate-400 font-medium">
-              {selectedProject ? `Deducted fund from ${selectedProject.clientName}` : "Held by clients across projects"}
+              {selectedProject ? `Deducted fund from ${selectedProject.clientname}` : "Held by clients across projects"}
             </span>
           </div>
 
@@ -466,7 +466,7 @@ export default function ManagerDashboard({ user, token, onLogout, openNotificati
             </span>
             <span className="text-2xl font-black text-slate-950 mt-1 block flex items-center gap-1.5">
               <Users className="w-5 h-5 text-blue-600"/>
-              {selectedProject ? selectedProject.clientName : `${projects.length} Assigned properties`}
+              {selectedProject ? selectedProject.clientname : `${projects.length} Assigned properties`}
             </span>
             <span className="text-[10px] text-slate-500 font-medium">
               {selectedProject ? `Location: ${selectedProject.location}` : "Sarah Connor & Robert Chen active"}
@@ -491,7 +491,7 @@ export default function ManagerDashboard({ user, token, onLogout, openNotificati
                     : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'}`}>
                       <div className="min-w-0 pr-2">
                         <p className="font-bold truncate">{proj.name}</p>
-                        <p className={`text-[10px] mt-0.5 ${isActive ? 'text-blue-200' : 'text-slate-400'}`}>Client: {proj.clientName}</p>
+                        <p className={`text-[10px] mt-0.5 ${isActive ? 'text-blue-200' : 'text-slate-400'}`}>Client: {proj.clientname}</p>
                       </div>
                       <ChevronRight className="w-4 h-4 shrink-0"/>
                     </button>);
@@ -583,7 +583,7 @@ export default function ManagerDashboard({ user, token, onLogout, openNotificati
                         Selected Focus
                       </span>
                       <h4 className="text-xl font-bold font-sans mt-1">{selectedProject.name}</h4>
-                      <p className="text-[10px] text-slate-300 mt-0.5">Assigned Client: {selectedProject.clientName} ({selectedProject.clientName.toLowerCase() === 'sarah connor' ? 'client@gmail.com' : 'client2@gmail.com'})</p>
+                      <p className="text-[10px] text-slate-300 mt-0.5">Assigned Client: {selectedProject.clientname} ({selectedProject.clientname.toLowerCase() === 'sarah connor' ? 'client@gmail.com' : 'client2@gmail.com'})</p>
                     </div>
 
                     <div className="flex items-center gap-2">
@@ -607,19 +607,19 @@ export default function ManagerDashboard({ user, token, onLogout, openNotificati
                       <div>
                         <p className="font-bold text-amber-900">Retention Release Alert System</p>
                         <p className="text-[10px] text-slate-500 mt-0.5">
-                          Amount: <strong className="text-amber-800">₹{selectedProject.retentionAmount.toLocaleString()}</strong> ({selectedProject.retentionPercentage}% holdback) • Due On Date: <strong className="text-slate-700">{new Date(selectedProject.retentionReleaseDate).toLocaleDateString()}</strong>
+                          Amount: <strong className="text-amber-800">₹{selectedProject.retentionamount.toLocaleString()}</strong> ({selectedProject.retentionpercentage}% holdback) • Due On Date: <strong className="text-slate-700">{new Date(selectedProject.retentionreleasedate).toLocaleDateString()}</strong>
                         </p>
                       </div>
                     </div>
 
                     <div className="flex flex-col sm:flex-row sm:items-center gap-2">
-                      {selectedProject.retentionReleased ? (<span className="p-1.5 px-3 bg-green-100 text-green-800 font-bold rounded-xl text-[10px]">
+                      {selectedProject.retentionreleased ? (<span className="p-1.5 px-3 bg-green-100 text-green-800 font-bold rounded-xl text-[10px]">
                           ✓ Retention Collected Successfully
                         </span>) : (<div className="space-y-1">
-                          <button onClick={handleReleaseRetention} disabled={!selectedProject.punchListCleared && selectedProject.status !== 'Defect Liability / Retention'} className="p-1.5 px-3 bg-amber-600 hover:bg-amber-700 font-bold text-white rounded-xl text-[11px] transition shadow-xs disabled:opacity-50">
+                          <button onClick={handleReleaseRetention} disabled={!selectedProject.punchlistcleared && selectedProject.status !== 'Defect Liability / Retention'} className="p-1.5 px-3 bg-amber-600 hover:bg-amber-700 font-bold text-white rounded-xl text-[11px] transition shadow-xs disabled:opacity-50">
                             Claim Retention Release
                           </button>
-                          {!selectedProject.punchListCleared && (<p className="text-[9px] text-red-500 font-medium">* Must resolve all punch list snags first</p>)}
+                          {!selectedProject.punchlistcleared && (<p className="text-[9px] text-red-500 font-medium">* Must resolve all punch list snags first</p>)}
                         </div>)}
                       <button onClick={handleDownloadProjectReport} className="p-1.5 px-3 bg-slate-800 hover:bg-slate-900 text-white rounded-xl text-[11px] transition shadow-xs flex items-center gap-2">
                         <Download className="w-3.5 h-3.5" />
@@ -677,7 +677,7 @@ export default function ManagerDashboard({ user, token, onLogout, openNotificati
                   {/* Snags inspection checklist */}
                   <div className="bg-white p-5 border border-slate-200 rounded-2xl shadow-xs">
                     <h5 className="font-bold text-slate-800 text-xs mb-3 flex items-center gap-1.5">
-                      <CheckCircle2 className="w-4 h-4 text-slate-600"/> Site defect Snags Clearing list
+                      <CheckCircle className="w-4 h-4 text-slate-600"/> Site defect Snags Clearing list
                     </h5>
 
                     <div className="space-y-3 max-h-[190px] overflow-y-auto mb-4">

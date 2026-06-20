@@ -13,7 +13,9 @@ const PORT = process.env.PORT || 3000;
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ limit: "50mb", extended: true }));
 // Create the uploads and assets folder if they do not exist
-const uploadsDir = path.resolve(process.cwd(), "uploads");
+const uploadsDir = process.env.VERCEL 
+    ? "/tmp/uploads" 
+    : path.resolve(process.cwd(), "uploads");
 if (!fs.existsSync(uploadsDir)) {
     fs.mkdirSync(uploadsDir, { recursive: true });
 }
@@ -750,4 +752,8 @@ async function startServer() {
         }
     }
 }
-startServer();
+if (!process.env.VERCEL) {
+    startServer();
+}
+
+export default app;

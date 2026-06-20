@@ -4,16 +4,16 @@ import { Pool } from "pg";
 dotenv.config();
 
 const connectionString = process.env.DATABASE_URL;
-if (!connectionString) {
-  throw new Error("DATABASE_URL is required in environment variables.");
-}
-
-const pool = new Pool({
+const pool = connectionString ? new Pool({
   connectionString,
   ssl: {
     rejectUnauthorized: false,
   },
-});
+}) : {
+  query: async () => {
+    throw new Error("DATABASE_URL environment variable is missing. Please configure DATABASE_URL in your Vercel Project Settings.");
+  }
+};
 
 function bool(value) {
   return value === 1 || value === true || value === "t" || value === "true";
@@ -627,6 +627,10 @@ async function seedDatabase() {
 }
 
 async function initializeDatabase() {
+  if (!process.env.DATABASE_URL) {
+    console.warn("WARNING: DATABASE_URL is not set. Skipping database initialization.");
+    return;
+  }
   await createTables();
   const countRows = await queryAll('SELECT COUNT(*) AS count FROM users;');
   const count = countRows[0] ? parseInt(countRows[0].count, 10) : 0;
